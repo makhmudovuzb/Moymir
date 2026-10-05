@@ -1,3 +1,6 @@
+import asyncio
+import os
+from aiohttp import web
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -7,14 +10,25 @@ from telegram.ext import (
     filters
 )
 
-TOKEN = "8961568897:AAHcme1vernf8Qm3k3CY2rWK54RqjbX3GKU"
-
+TOKEN = os.getenv("BOT_TOKEN", "8961568897:AAHcme1vernf8Qm3k3CY2rWK54RqjbX3GKU")
 ADMIN_ID = 8960600776
 
 # Admin ko'rgan xabar ID -> foydalanuvchi ID
 message_users = {}
 
 
+# ---------- RENDER UCHUN VEB-SERVER ----------
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", lambda r: web.Response(text="Support Bot is running!"))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 10000))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
+
+# ---------- HANDLERLAR ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.effective_user.first_name
 
@@ -72,13 +86,16 @@ async def admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await message.copy(chat_id=user_id)
 
 
-def main():
+# ---------- ISHGA TUSHIRISH ----------
+async def main():
+    # Render portini ushlab turuvchi veb-serverni ishga tushiramiz
+    await start_web_server()
+
+    # PTB ilovasini yaratamiz
     app = Application.builder().token(TOKEN).build()
 
     # /start
-    app.add_handler(
-        CommandHandler("start", start)
-    )
+    app.add_handler(CommandHandler("start", start))
 
     # Admin javoblari
     app.add_handler(
@@ -97,8 +114,14 @@ def main():
     )
 
     print("🤖 Support bot ishga tushdi...")
-    app.run_polling()
+
+    # Botni va pollingni ishga tushiramiz
+    async with app:
+        await app.start()
+        await app.updater.start_polling()
+        # Bot uzluksiz ishlashi uchun kuting
+        await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
